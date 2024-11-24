@@ -6,27 +6,32 @@ class BarTracker {
         this.avgVelocityEl = document.getElementById('avgVelocity');
         this.barCoordinatesEl = document.getElementById('barCoordinates');
         this.timePointsEl = document.getElementById('timePoints');
+        this.armsCoordinatesEl = document.getElementById('armsCoordinates');
         
         this.startTrackingBtn = document.getElementById('startTracking');
         this.stopTrackingBtn = document.getElementById('stopTracking');
         
         this.tracking = false;
         this.barPositions = [];
+        this.leftArmPositions = [];
+        this.rightArmPositions = [];
         this.timestamps = [];
         this.model = null;
+        this.poseModel = null;
         this.confidenceThreshold = 0.5;
         
         this.setupEventListeners();
-        this.loadModel();
+        this.loadModels();
     }
     
-    async loadModel() {
+    async loadModels() {
         try {
-            // Load the pre-trained MobileNet model
+            // Load both MobileNet and PoseNet models
             this.model = await tf.loadGraphModel('https://tfhub.dev/tensorflow/tfjs-model/ssd_mobilenet_v2/1/default/1', { fromTFHub: true });
-            console.log('Model loaded successfully');
+            this.poseModel = await tf.loadGraphModel('https://tfhub.dev/tensorflow/tfjs-model/movenet/singlepose/lightning/4', { fromTFHub: true });
+            console.log('Models loaded successfully');
         } catch (error) {
-            console.error('Error loading model:', error);
+            console.error('Error loading models:', error);
         }
     }
     
@@ -36,8 +41,8 @@ class BarTracker {
     }
     
     async startTracking() {
-        if (!this.model) {
-            alert('Please wait for the model to load');
+        if (!this.model || !this.poseModel) {
+            alert('Please wait for the models to load');
             return;
         }
 
@@ -47,6 +52,8 @@ class BarTracker {
             
             this.tracking = true;
             this.barPositions = [];
+            this.leftArmPositions = [];
+            this.rightArmPositions = [];
             this.timestamps = [];
             
             this.trackBar();
@@ -63,10 +70,14 @@ class BarTracker {
         this.ctx.drawImage(this.video, 0, 0, this.canvas.width, this.canvas.height);
         
         try {
-            const barPosition = await this.detectBarWithTensorflow();
+            // Detect bar and pose
+            const [barPosition, poseKeypoints] = await Promise.all([
+                this.detectBarWithTensorflow(),
+                this.detectPose()
+            ]);
             
             if (barPosition) {
-                // Draw bounding box
+                // Draw bar bounding box
                 this.ctx.strokeStyle = '#00ff00';
                 this.ctx.lineWidth = 2;
                 this.ctx.strokeRect(
@@ -77,15 +88,19 @@ class BarTracker {
                 );
 
                 this.barPositions.push(barPosition);
-                this.timestamps.push(Date.now());
-                
-                // Update UI with current bar coordinates
                 this.barCoordinatesEl.textContent = 
-                    `x: ${Math.round(barPosition.x)}, y: ${Math.round(barPosition.y)}`;
-                
-                if (this.barPositions.length > 1) {
-                    this.calculateVelocity();
-                }
+                    `Bar: x: ${Math.round(barPosition.x)}, y: ${Math.round(barPosition.y)}`;
+            }
+
+            if (poseKeypoints) {
+                // Draw arms
+                this.drawArms(poseKeypoints);
+            }
+
+            this.timestamps.push(Date.now());
+            
+            if (this.barPositions.length > 1) {
+                this.calculateVelocity();
             }
         } catch (error) {
             console.error('Error during detection:', error);
@@ -139,6 +154,50 @@ class BarTracker {
         predictions.forEach(t => t.dispose());
         
         return bestBox;
+    }
+    
+    async detectPose() {
+        const input = tf.tidy(() => {
+            return tf.browser.fromPixels(this.canvas)
+                .expandDims(0)
+                .div(127.5)
+                .sub(1);
+        });
+
+        const poses = await this.poseModel.predict(input);
+        input.dispose();
+
+        return poses;
+    }
+
+    drawArms(poses) {
+        const leftShoulder = poses[5];
+        const leftElbow = poses[7];
+        const leftWrist = poses[9];
+        const rightShoulder = poses[6];
+        const rightElbow = poses[8];
+        const rightWrist = poses[10];
+
+        // Draw left arm
+        this.ctx.strokeStyle = '#ff0000';
+        this.ctx.beginPath();
+        this.ctx.moveTo(leftShoulder.x, leftShoulder.y);
+        this.ctx.lineTo(leftElbow.x, leftElbow.y);
+        this.ctx.lineTo(leftWrist.x, leftWrist.y);
+        this.ctx.stroke();
+
+        // Draw right arm
+        this.ctx.strokeStyle = '#0000ff';
+        this.ctx.beginPath();
+        this.ctx.moveTo(rightShoulder.x, rightShoulder.y);
+        this.ctx.lineTo(rightElbow.x, rightElbow.y);
+        this.ctx.lineTo(rightWrist.x, rightWrist.y);
+        this.ctx.stroke();
+
+        // Update arm coordinates display
+        this.armsCoordinatesEl.textContent = 
+            `Left Wrist: x: ${Math.round(leftWrist.x)}, y: ${Math.round(leftWrist.y)} | ` +
+            `Right Wrist: x: ${Math.round(rightWrist.x)}, y: ${Math.round(rightWrist.y)}`;
     }
     
     calculateVelocity() {
