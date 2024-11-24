@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Velocity Based Training Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        #videoContainer {
+            position: relative;
+            max-width: 100%;
+            margin: 20px auto;
+        }
+        #videoElement, #canvas {
+            max-width: 100%;
+        }
+        #results {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f0f0f0;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Velocity Based Training Bar Tracker</h1>
+    
+    <div id="videoContainer">
+        <video id="videoElement" width="640" height="480" autoplay playsinline></video>
+        <canvas id="canvas" width="640" height="480"></canvas>
+    </div>
+
+    <div id="controls">
+        <button id="startTracking">Start Tracking</button>
+        <button id="stopTracking">Stop Tracking</button>
+    </div>
+
+    <div id="results">
+        <h2>Tracking Results</h2>
+        <p>Average Velocity: <span id="avgVelocity">-</span></p>
+        <p>Bar Coordinates: <span id="barCoordinates">-</span></p>
+        <p>Time Between Points: <span id="timePoints">-</span></p>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-vis"></script>
+    <script src="app.js"></script>
+</body>
+</html>
